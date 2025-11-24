@@ -83,6 +83,14 @@ const skillPool = {
     ]
 };
 
+let recordsCache = [];
+let controlsPanelTimer = null;
+const uiElements = {
+    skillHotbar: null,
+    controlsPanel: null,
+    controlsToggle: null
+};
+
 // 根据品种和毛色生成技能
 function generateSkills(breed, color) {
     const skills = [];
@@ -151,6 +159,61 @@ function generateSkills(breed, color) {
     return skills;
 }
 
+function renderSkillHotbar(skills = []) {
+    if (!uiElements.skillHotbar) return;
+    uiElements.skillHotbar.innerHTML = skills.map((skill, index) => `
+        <div class="skill-slot" data-skill-slot="${index}">
+            <div class="skill-cooldown"></div>
+            <div class="skill-key">[${index + 1}]</div>
+            <div class="skill-name">${skill.name}</div>
+            <div class="skill-desc">${skill.description}</div>
+        </div>
+    `).join('');
+}
+
+function updateSkillHotbar(player) {
+    if (!player || !uiElements.skillHotbar) return;
+    player.skills.forEach((skill, index) => {
+        const slot = uiElements.skillHotbar.querySelector(`[data-skill-slot="${index}"]`);
+        if (!slot) return;
+        const cooldownFill = slot.querySelector('.skill-cooldown');
+        const remaining = Math.max(0, player.skillCooldowns[index] || 0);
+        const ratio = skill.cooldown ? (remaining / skill.cooldown) : 0;
+        cooldownFill.style.height = `${Math.min(100, ratio * 100)}%`;
+        slot.classList.toggle('cooldown', remaining > 0);
+    });
+}
+
+function showControlsPanel(autoHide = false) {
+    if (!uiElements.controlsPanel || !uiElements.controlsToggle) return;
+    uiElements.controlsPanel.classList.remove('hidden');
+    uiElements.controlsToggle.setAttribute('aria-expanded', 'true');
+    if (controlsPanelTimer) {
+        clearTimeout(controlsPanelTimer);
+    }
+    if (autoHide) {
+        controlsPanelTimer = setTimeout(() => {
+            hideControlsPanel();
+        }, 5000);
+    }
+}
+
+function hideControlsPanel() {
+    if (!uiElements.controlsPanel || !uiElements.controlsToggle) return;
+    uiElements.controlsPanel.classList.add('hidden');
+    uiElements.controlsToggle.setAttribute('aria-expanded', 'false');
+}
+
+function toggleControlsPanel() {
+    if (!uiElements.controlsPanel) return;
+    const isHidden = uiElements.controlsPanel.classList.contains('hidden');
+    if (isHidden) {
+        showControlsPanel();
+    } else {
+        hideControlsPanel();
+    }
+}
+
 // 初始化角色创建界面
 function initCharacterCreation() {
     const breedOptions = document.querySelectorAll('.breed-option');
@@ -182,12 +245,21 @@ function initCharacterCreation() {
         if (selectedBreed && selectedColor) {
             const skills = generateSkills(selectedBreed, selectedColor);
             const skillsList = document.getElementById('skills-list');
-            skillsList.innerHTML = skills.map(skill => 
+            const stats = breedData[selectedBreed].baseStats;
+            const typeLabels = { attack: '攻擊', special: '特殊', destruction: '破壞' };
+            const statsHtml = `
+                <div class="stats-badge">力量 ${stats.power}</div>
+                <div class="stats-badge">速度 ${stats.speed}</div>
+                <div class="stats-badge">防禦 ${stats.defense}</div>
+            `;
+            const skillsHtml = skills.map(skill => 
                 `<div class="skill-item">
                     <strong>${skill.name}</strong><br>
+                    <small>${typeLabels[skill.type] || skill.type}</small><br>
                     <small>${skill.description}</small>
                 </div>`
             ).join('');
+            skillsList.innerHTML = statsHtml + skillsHtml;
             
             startBtn.disabled = false;
             gameState.character = {
@@ -196,6 +268,7 @@ function initCharacterCreation() {
                 skills: skills,
                 stats: breedData[selectedBreed].baseStats
             };
+            renderSkillHotbar(skills);
         } else {
             startBtn.disabled = true;
         }
@@ -205,6 +278,8 @@ function initCharacterCreation() {
         if (gameState.character) {
             switchScreen('game-screen');
             initGame();
+            renderSkillHotbar(gameState.character.skills);
+            showControlsPanel(true);
         }
     });
 }
@@ -214,6 +289,9 @@ function switchScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
     gameState.screen = screenId;
+    if (screenId !== 'game-screen') {
+        hideControlsPanel();
+    }
 }
 
 // 游戏主类
@@ -348,7 +426,11 @@ class Game {
                         terrain.takeDamage(this.player.attackDamage);
                         if (terrain.destroyed) {
                             this.destroyedCount++;
-                            this.createDestructionParticles(terrain.x + terrain.w / 2, terrain.y + terrain.h / 2);
+                            this.createDestructionParticles(
+                                terrain.x + terrain.w / 2,
+                                terrain.y + terrain.h / 2,
+                                terrain.getParticleColor()
+                            );
                         }
                     }
                 }
@@ -361,7 +443,7 @@ class Game {
                         entity.takeDamage(this.player.attackDamage);
                         if (entity.destroyed) {
                             this.destroyedCount++;
-                            this.createDestructionParticles(entity.x, entity.y);
+                            this.createDestructionParticles(entity.x, entity.y, entity.getParticleColor());
                         }
                     }
                 }
@@ -376,9 +458,9 @@ class Game {
                rect1.y + rect1.h > rect2.y;
     }
     
-    createDestructionParticles(x, y) {
+    createDestructionParticles(x, y, color = '255, 107, 107') {
         for (let i = 0; i < 20; i++) {
-            this.particles.push(new Particle(x, y));
+            this.particles.push(new Particle(x, y, color));
         }
     }
     
@@ -397,6 +479,8 @@ class Game {
             document.getElementById('time-display').textContent = 
                 `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
+        
+        updateSkillHotbar(this.player);
     }
     
     render() {
@@ -704,6 +788,17 @@ class Terrain {
         return healthMap[this.type] || 50;
     }
     
+    getParticleColor() {
+        const colorMap = {
+            house: '212, 165, 116',
+            tower: '160, 160, 160',
+            skyscraper: '112, 128, 144',
+            castle: '139, 125, 107',
+            ground: '139, 115, 85'
+        };
+        return colorMap[this.type] || '255, 107, 107';
+    }
+    
     takeDamage(damage) {
         this.health -= damage;
         if (this.health <= 0) {
@@ -719,6 +814,8 @@ class Terrain {
             for (let i = 0; i < this.w; i += 20) {
                 ctx.fillRect(this.x + i, this.y, 1, this.h);
             }
+            ctx.fillStyle = '#5c472f';
+            ctx.fillRect(this.x, this.y - 10, this.w, 10);
         } else {
             // 建筑物
             const colors = {
@@ -737,6 +834,8 @@ class Terrain {
             const spacing = 25;
             for (let i = 10; i < this.w - 10; i += spacing) {
                 for (let j = 10; j < this.h - 10; j += spacing) {
+                    const flicker = Math.random() > 0.8 ? '#ffc857' : '#87ceeb';
+                    ctx.fillStyle = flicker;
                     ctx.fillRect(this.x + i, this.y + j, windowSize, windowSize);
                 }
             }
@@ -749,6 +848,19 @@ class Terrain {
                 ctx.fillRect(this.x, this.y - 10, barWidth, barHeight);
                 ctx.fillStyle = '#00ff00';
                 ctx.fillRect(this.x, this.y - 10, barWidth * (this.health / this.maxHealth), barHeight);
+                
+                // 裂痕效果
+                const damageRatio = 1 - (this.health / this.maxHealth);
+                ctx.strokeStyle = `rgba(0, 0, 0, ${0.2 + damageRatio * 0.5})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.w * 0.2, this.y);
+                ctx.lineTo(this.x + this.w * 0.4, this.y + this.h * 0.5);
+                ctx.lineTo(this.x + this.w * 0.3, this.y + this.h);
+                ctx.moveTo(this.x + this.w * 0.7, this.y);
+                ctx.lineTo(this.x + this.w * 0.6, this.y + this.h * 0.4);
+                ctx.lineTo(this.x + this.w * 0.8, this.y + this.h);
+                ctx.stroke();
             }
         }
     }
@@ -780,6 +892,16 @@ class Creature {
         return healthMap[this.type] || 20;
     }
     
+    getParticleColor() {
+        const colorMap = {
+            bird: '255, 107, 107',
+            dog: '139, 115, 85',
+            rabbit: '245, 245, 245',
+            squirrel: '212, 165, 116'
+        };
+        return colorMap[this.type] || '255, 255, 255';
+    }
+    
     takeDamage(damage) {
         this.health -= damage;
         if (this.health <= 0) {
@@ -802,34 +924,44 @@ class Creature {
     }
     
     render(ctx) {
+        ctx.save();
         const colors = {
             bird: '#ff6b6b',
             dog: '#8b7355',
             rabbit: '#f5f5f5',
             squirrel: '#d4a574'
         };
-        
         ctx.fillStyle = colors[this.type] || '#888';
+        ctx.translate(this.x, this.y);
         
         if (this.type === 'bird') {
-            // 鸟
-            ctx.fillRect(this.x, this.y, 20, 15);
-            ctx.fillRect(this.x + 15, this.y + 5, 10, 5);
+            ctx.beginPath();
+            ctx.ellipse(10, 8, 12, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillRect(15, 6, 12, 4);
+            ctx.fillStyle = '#ffd166';
+            ctx.fillRect(5, 6, 4, 4);
         } else if (this.type === 'dog') {
-            // 狗
-            ctx.fillRect(this.x, this.y + 10, 25, 20);
-            ctx.fillRect(this.x + 5, this.y, 15, 15);
+            ctx.fillRect(0, 10, 25, 15);
+            ctx.fillRect(4, 0, 15, 12);
+            ctx.fillStyle = '#f4a261';
+            ctx.fillRect(18, 5, 6, 4);
         } else if (this.type === 'rabbit') {
-            // 兔子
-            ctx.fillRect(this.x + 5, this.y, 20, 25);
-            ctx.fillRect(this.x, this.y + 5, 8, 15);
-            ctx.fillRect(this.x + 22, this.y + 5, 8, 15);
+            ctx.fillRect(6, 5, 16, 20);
+            ctx.fillRect(2, -5, 6, 18);
+            ctx.fillRect(20, -5, 6, 18);
+            ctx.fillStyle = '#f8edeb';
+            ctx.fillRect(10, 12, 8, 4);
         } else if (this.type === 'squirrel') {
-            // 松鼠
-            ctx.fillRect(this.x, this.y + 10, 20, 20);
-            ctx.fillRect(this.x + 5, this.y, 10, 15);
-            ctx.fillRect(this.x + 18, this.y + 5, 12, 8);
+            ctx.fillRect(0, 10, 18, 16);
+            ctx.fillRect(4, -2, 12, 15);
+            ctx.beginPath();
+            ctx.fillStyle = '#c97c5d';
+            ctx.arc(20, 10, 10, 0, Math.PI * 1.5);
+            ctx.fill();
         }
+        
+        ctx.restore();
         
         // 健康条
         if (this.health < this.maxHealth) {
@@ -843,7 +975,7 @@ class Creature {
 
 // 粒子类
 class Particle {
-    constructor(x, y) {
+    constructor(x, y, color = '255, 107, 107') {
         this.x = x;
         this.y = y;
         this.vx = (Math.random() - 0.5) * 10;
@@ -851,6 +983,7 @@ class Particle {
         this.life = 1000;
         this.maxLife = 1000;
         this.size = Math.random() * 5 + 2;
+        this.color = color;
     }
     
     update(deltaTime) {
@@ -862,7 +995,7 @@ class Particle {
     
     render(ctx) {
         const alpha = this.life / this.maxLife;
-        ctx.fillStyle = `rgba(255, 107, 107, ${alpha})`;
+        ctx.fillStyle = `rgba(${this.color}, ${alpha})`;
         ctx.fillRect(this.x, this.y, this.size, this.size);
     }
 }
@@ -874,6 +1007,8 @@ function saveRecord(time, character) {
         time: time,
         breed: breedData[character.breed].name,
         color: colorData[character.color].name,
+        breedKey: character.breed,
+        colorKey: character.color,
         date: new Date().toLocaleString('zh-TW')
     });
     
@@ -886,6 +1021,7 @@ function saveRecord(time, character) {
     
     // 只保留前10条
     records = records.slice(0, 10);
+    recordsCache = records;
     
     localStorage.setItem('catDestructionRecords', JSON.stringify(records));
 }
@@ -899,6 +1035,7 @@ function parseTime(timeString) {
 function showRecords() {
     const records = JSON.parse(localStorage.getItem('catDestructionRecords') || '[]');
     const recordsList = document.getElementById('records-list');
+    recordsCache = records;
     
     if (records.length === 0) {
         recordsList.innerHTML = '<p>尚無破關紀錄</p>';
@@ -906,11 +1043,43 @@ function showRecords() {
     }
     
     recordsList.innerHTML = records.map((record, index) => `
-        <div class="record-item">
+        <div class="record-item" data-record-index="${index}">
             <div class="record-time">#${index + 1} - ${record.time}</div>
             <div class="record-details">${record.breed} · ${record.color} · ${record.date}</div>
+            <div class="record-actions">
+                <button class="btn-secondary record-replay" data-record-index="${index}">使用此配置開局</button>
+            </div>
         </div>
     `).join('');
+    
+    recordsList.querySelectorAll('.record-replay').forEach(button => {
+        button.addEventListener('click', () => {
+            const record = records[button.dataset.recordIndex];
+            replayRecord(record);
+        });
+    });
+}
+
+function getKeyByName(data, value) {
+    return Object.keys(data).find(key => data[key].name === value);
+}
+
+function replayRecord(record) {
+    if (!record) return;
+    const breedKey = record.breedKey || getKeyByName(breedData, record.breed);
+    const colorKey = record.colorKey || getKeyByName(colorData, record.color);
+    if (!breedKey || !colorKey) return;
+    
+    switchScreen('character-creation');
+    requestAnimationFrame(() => {
+        const breedOption = document.querySelector(`.breed-option[data-breed="${breedKey}"]`);
+        const colorOption = document.querySelector(`.color-option[data-color="${colorKey}"]`);
+        breedOption?.click();
+        colorOption?.click();
+        setTimeout(() => {
+            document.getElementById('start-game-btn')?.click();
+        }, 150);
+    });
 }
 
 // 初始化游戏
@@ -925,6 +1094,15 @@ function initGame() {
 
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
+    uiElements.skillHotbar = document.getElementById('skill-hotbar');
+    uiElements.controlsPanel = document.getElementById('controls-panel');
+    uiElements.controlsToggle = document.getElementById('controls-toggle');
+    
+    if (uiElements.controlsToggle) {
+        uiElements.controlsToggle.addEventListener('click', toggleControlsPanel);
+    }
+    hideControlsPanel();
+    
     initCharacterCreation();
     
     // 游戏结束按钮

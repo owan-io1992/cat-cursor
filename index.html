@@ -82,9 +82,20 @@
                     </div>
                 </div>
                 <div id="timer">時間: <span id="time-display">00:00</span></div>
-                <div id="controls-hint">
-                    <div>移動: A/D | 跳躍: W/空格 | 攻擊: J | 技能: 1/2/3</div>
+                <div class="controls-row">
+                    <button id="controls-toggle" class="btn-secondary" aria-expanded="false" aria-controls="controls-panel">?</button>
+                    <div id="skill-hotbar" aria-live="polite"></div>
                 </div>
+            </div>
+            <div id="controls-panel" class="controls-overlay hidden" role="status">
+                <h3>操作提示</h3>
+                <ul>
+                    <li>移動：A / D 或 ← / →</li>
+                    <li>跳躍：W / 空白鍵 / ↑</li>
+                    <li>攻擊：J</li>
+                    <li>技能：數字鍵 1 / 2 / 3</li>
+                </ul>
+                <small>提示將在幾秒後自動隱藏，亦可按 ? 再打開。</small>
             </div>
         </div>
         
