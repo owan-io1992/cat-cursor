@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>貓咪破壞世界 - Cat Destruction</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- 角色创建界面 -->
+        <div id="character-creation" class="screen active">
+            <h1>創造你的破壞貓咪</h1>
+            <div class="creation-panel">
+                <div class="selection-group">
+                    <h2>選擇品種</h2>
+                    <div class="breed-selector">
+                        <div class="breed-option" data-breed="persian">
+                            <div class="cat-preview persian"></div>
+                            <span>波斯貓</span>
+                        </div>
+                        <div class="breed-option" data-breed="siamese">
+                            <div class="cat-preview siamese"></div>
+                            <span>暹羅貓</span>
+                        </div>
+                        <div class="breed-option" data-breed="british">
+                            <div class="cat-preview british"></div>
+                            <span>英國短毛貓</span>
+                        </div>
+                        <div class="breed-option" data-breed="maine">
+                            <div class="cat-preview maine"></div>
+                            <span>緬因貓</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="selection-group">
+                    <h2>選擇毛色</h2>
+                    <div class="color-selector">
+                        <div class="color-option" data-color="orange">
+                            <div class="color-preview orange"></div>
+                            <span>橘色</span>
+                        </div>
+                        <div class="color-option" data-color="black">
+                            <div class="color-preview black"></div>
+                            <span>黑色</span>
+                        </div>
+                        <div class="color-option" data-color="white">
+                            <div class="color-preview white"></div>
+                            <span>白色</span>
+                        </div>
+                        <div class="color-option" data-color="gray">
+                            <div class="color-preview gray"></div>
+                            <span>灰色</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="skills-preview">
+                    <h2>你的技能</h2>
+                    <div id="skills-list"></div>
+                </div>
+                
+                <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
+                    <button id="start-game-btn" class="btn-primary" disabled>開始破壞世界</button>
+                    <button id="view-dashboard-btn" class="btn-primary">查看紀錄</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 游戏界面 -->
+        <div id="game-screen" class="screen">
+            <canvas id="game-canvas"></canvas>
+            <div id="game-ui">
+                <div id="health-bar">
+                    <div id="health-fill"></div>
+                </div>
+                <div id="destruction-meter">
+                    <span>破壞進度: <span id="destruction-percent">0%</span></span>
+                    <div id="destruction-bar">
+                        <div id="destruction-fill"></div>
+                    </div>
+                </div>
+                <div id="timer">時間: <span id="time-display">00:00</span></div>
+                <div id="controls-hint">
+                    <div>移動: A/D | 跳躍: W/空格 | 攻擊: J | 技能: 1/2/3</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 游戏结束界面 -->
+        <div id="game-over" class="screen">
+            <h1>世界已被完全破壞！</h1>
+            <div id="final-stats">
+                <p>破關時間: <span id="final-time"></span></p>
+                <p>破壞進度: <span id="final-destruction">100%</span></p>
+            </div>
+            <div style="display: flex; gap: 15px; margin-top: 20px;">
+                <button id="play-again-btn" class="btn-primary">再玩一次</button>
+                <button id="view-records-btn" class="btn-primary">查看紀錄</button>
+            </div>
+        </div>
+        
+        <!-- 成绩 Dashboard -->
+        <div id="dashboard" class="screen">
+            <h1>破關紀錄</h1>
+            <div id="records-list"></div>
+            <button id="back-to-menu-btn" class="btn-primary">返回主選單</button>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
+
